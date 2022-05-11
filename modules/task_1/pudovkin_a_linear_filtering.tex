@@ -1,0 +1,984 @@
+\documentclass{report}
+
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{luainputenc}
+\usepackage[english, russian]{babel}
+\usepackage[pdftex]{hyperref}
+\usepackage[14pt]{extsizes}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+
+\geometry{a4paper,top=2cm,bottom=3cm,left=2cm,right=1.5cm}
+\setlength{\parskip}{0.5cm}
+\setlist{nolistsep, itemsep=0.3cm,parsep=0pt}
+
+\lstset{language=C++,
+		basicstyle=\footnotesize,
+		keywordstyle=\color{blue}\ttfamily,
+		stringstyle=\color{red}\ttfamily,
+		commentstyle=\color{green}\ttfamily,
+		morecomment=[l][\color{magenta}]{\#}, 
+		tabsize=4,
+		breaklines=true,
+  		breakatwhitespace=true,
+  		title=\lstname,       
+}
+
+\makeatletter
+\renewcommand\@biblabel[1]{#1.\hfil}
+\makeatother
+
+\begin{document}
+
+\begin{titlepage}
+
+\begin{center}
+Министерство науки и высшего образования Российской Федерации
+\end{center}
+
+\begin{center}
+Федеральное государственное автономное образовательное учреждение высшего образования \\
+Национальный исследовательский Нижегородский государственный университет им. Н.И. Лобачевского
+\end{center}
+
+\begin{center}
+Институт информационных технологий, математики и механики
+\end{center}
+
+\vspace{4em}
+
+\begin{center}
+\textbf{\LargeОтчет по лабораторной работе} \\
+\end{center}
+\begin{center}
+\textbf{\Large«Линейная фильтрация изображений (вертикальное разбиение). Ядро Гаусса 3x3.»} \\
+\end{center}
+
+\vspace{4em}
+
+\newbox{\lbox}
+\savebox{\lbox}{\hbox{text}}
+\newlength{\maxl}
+\setlength{\maxl}{\wd\lbox}
+\hfill\parbox{7cm}{
+\hspace*{5cm}\hspace*{-5cm}\textbf{Выполнил:} \\ студент группы 381906-1 \\ Пудовкин А. В.\\
+\\
+\hspace*{5cm}\hspace*{-5cm}\textbf{Проверил:}\\ доцент кафедры МОСТ, \\ кандидат технических наук \\ Сысоев А. В.\\
+ }
+\vspace{\fill}
+
+\begin{center} Нижний Новгород \\ 2022 \end{center}
+
+\end{titlepage}
+
+\setcounter{page}{2}
+
+% Содержание
+\tableofcontents
+\newpage
+
+% Введение
+\section*{Введение}
+\addcontentsline{toc}{section}{Введение}
+Размытие по Гауссу в цифровой обработке изображений — способ размытия изображения с помощью функции Гаусса, названной в честь немецкого математика Карла Фридриха Гаусса.
+
+Этот эффект широко используется в графических редакторах для уменьшения шума изображения и снижения детализации. Визуальный эффект этого способа размытия напоминает эффект просмотра изображения через полупрозрачный экран, и отчётливо отличается от эффекта боке, создаваемого расфокусированным объективом или тенью объекта при обычном освещении.
+
+Размытие по Гауссу также используется в качестве этапа предварительной обработки в алгоритмах компьютерного зрения для улучшения структуры изображения в различных масштабах.
+\par В данной  работе рассмотрим фильтрацию изображения "фильтром Гаусса" с ядром Гаусса 3х3.
+\newpage
+
+% Постановка задачи
+\section*{Постановка задачи}
+\addcontentsline{toc}{section}{Постановка задачи}
+В рамках лабораторной работы необходимо реализовать последовательную и несколько параллельных реализации линейной фильтрации изображений с их вертикальным разбиением "фильтром Гаусса" с ядром Гаусса 3х3. 
+\par Для реализации параллельной версии будут использованы средства OpenMP, TBB, API std::thread. Проведем тестирование работоспособности приложения.
+\newpage
+
+% Метод решения
+\section*{Описание алгоритма}
+\addcontentsline{toc}{section}{Описание алгоритма}
+\par 
+Создаем ядро Гаусса размером 3х3. 
+\par Алгоритм Фильтра Гаусса :
+\begin{itemize}
+\item Для каждого пикселя исходного изображения рассматривается область 3x3. 
+\item Значение каждого пикселя из этой области умножается на значение из соответствующей ячейки в ядре. 
+\item Для нового изображения соответствующий пиксель кладётся значение специально созданной переменной value.
+\end{itemize}
+\newpage
+
+% Схема распараллеливания
+\section*{Схема распараллеливания}
+\addcontentsline{toc}{section}{Схема распараллеливания}
+Для того, чтобы распараллелить алгоритм Гаусса, нам необходимо разделить массив значений данного нам изображения по вертикали (по столбцам) на порции данных, которые будут использованы процессами. 
+\par
+Для каждого процесса работа происходит со своей порцией значений и выполняет для каждого элемента алгоритм, который был описан выше.
+\par
+После завершения работы с изображением, результаты объединяются в результирующий матрице значений
+\begin{itemize}
+\item В случае OpenMP реализации распараллеливание происходит с помощью 
+ \begin{lstlisting}
+ #pragma omp parallel
+\end{lstlisting}
+\item В случае TBB реализации распараллеливание происходит с помощью:
+\begin{lstlisting}
+tbb::parallel_for
+\end{lstlisting}
+
+\end{itemize}
+\newpage
+
+% Описание программной реализации
+\section*{Описание программной реализации}
+\addcontentsline{toc}{section}{Описание программной реализации}
+Функция рандомизации матрицы
+\begin{lstlisting}
+vector<vector<double>> getRandomMatrix(const v_size rows, const v_size cols) {
+\end{lstlisting}
+\par В качестве входных параметров передаются:
+\begin{itemize}
+\item количество строк.
+\item количество столбцов.
+\end{itemize}
+\par Вспомогательная функция clamp:
+\begin{lstlisting}
+T clamp(T value, T min, T max) {
+\end{lstlisting}
+\par В качестве входных параметров передаются:
+\begin{itemize}
+\item Значение 
+\item Максимальное возможное значение.
+\item Минимальное возможное значение.
+\end{itemize}
+\par Функция для подсчета цвета нового пикселя.
+\begin{lstlisting}
+double calculateNewPixelColor(const vector<vector<double>>& colorMatrix,
+                              int coordinateX,
+                              int coordinateY) {
+\end{lstlisting}
+\par В качестве входных данных передаются исходная матрица и координаты x и y.
+\par Алгоритм последовательной линейной фильтрации изображения фильтром Гаусса вызывается с помощью функции:
+\begin{lstlisting}
+vector<vector<double>> getSequentialFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+\end{lstlisting}
+\par В качестве входного параметра передается матрица цветов
+\par Последовательный метод реализован в:
+\begin{lstlisting}
+vector<vector<double>> getParallelFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+\end{lstlisting}
+\par Входные параметры аналогичны последовательной функции
+
+\newpage
+
+% Подтверждение корректности
+\section*{Подтверждение корректности}
+\addcontentsline{toc}{section}{Подтверждение корректности}
+Для подтверждения корректности в программе содержится набор тестов, разработанных с помощью использования Google C++ Testing Framework.
+\par Данные тесты проверяют срабатывание исключений при неккоректном заданием матрицы, корректность вычислений(то есть сравнение результата последовательного метода и результата параллельного метода) и также эффективность выполнения последовательного и параллельного метода.
+\par Успешное прохождение всех тестов доказывает корректность работы всей программы.
+\newpage
+
+% Результаты экспериментов
+\section*{Результаты экспериментов}
+\addcontentsline{toc}{section}{Результаты экспериментов}
+Вычислительные эксперименты для оценки эффективности параллельной и последовательной линейной фильтрации изображения фильтром Гаусса производились на оборудовании со следующей аппаратной конфигурацией:
+
+\begin{itemize}
+\item Процессор:Процессор Intel® Pentium® G4600
+3 МБ кэш-памяти, тактовая частота 3,60 ГГц;
+\item Оперативная память: 8,0 GB;
+\item ОС: Microsoft Windows 10.
+\end{itemize}
+
+\par Для сравнения скорости выполнения программы была выбрана матрица размерностью 5000*5000 . 
+\par Результаты экспериментов представлены в Таблице 1.
+
+\begin{table}[!h]
+\caption{Результаты вычислительных экспериментов}
+\centering
+\begin{tabular}{p{4cm} p{4cm} p{4cm} p{4cm}}
+Реализация & Последовательно & Параллельно & Ускорение  \\
+openmp        & 4.65          & 2.14     & 2.17       \\
+tbb        & 4.55         & 2.18     & 2.08       \\
+threads        & 4.58         & 2.18     & 2.10         
+\end{tabular}
+\end{table}
+
+\par Параллельная реализация оказалась быстрее, по сравнению с последовательной реализацией, особенно, это становится виднее с ростом данных. 
+\newpage
+
+% Заключение
+\section*{Заключение}
+\addcontentsline{toc}{section}{Заключение}
+В результате лабораторной работы были разработаны последовательная и несколько параллельных реализаций линейной фильтрации изображения фильтром Гаусса с ядром Гаусса 3х3.
+\par Основной целью данной лабораторной работы была реализация эффективной параллельной версии. Эта задача была успешно достигнута, что подтверждается результатами экспериментов, проведенных в ходе работы.
+\par Кроме того, были разработаныя тесты, созданные для данного программного проекта с использованием Google C++ Testing Framework и необходимые для подтверждения корректности работы программы и для демонстрации функционала.
+\newpage
+
+% Список литературы
+\begin{thebibliography}{1}
+\addcontentsline{toc}{section}{Список литературы}
+\bibitem{Gergel}
+Гергель В. П., Стронгин Р. Г. Основы параллельных вычислений для многопроцессорных вычислительных систем. – 2003.
+\bibitem{GergeL}
+Гергель В. П. Теория и практика параллельных вычислений. – 2007. 
+\bibitem{Gaussian}
+Фильтр Гаусса: URL: https://habr.com/ru/post/142818/
+\bibitem{Algorithm}
+URL: https://techcave.ru/posts/66-filtry-v-opencv-average-i-gaussianblur.html
+\end{thebibliography}
+\newpage
+
+% Приложение
+\section*{Приложение}
+\addcontentsline{toc}{section}{Приложение}
+Реализация OpenMP.
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.h
+
+// Copyright 2022 Pudovkin Artem
+#ifndef MODULES_TASK_2_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+#define MODULES_TASK_2_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+#include <vector>
+
+std::vector<std::vector<double>> getRandomMatrix(
+    const std::vector<std::vector<double>>::size_type rows,
+    const std::vector<std::vector<double>>::size_type cols);
+std::vector<std::vector<double>> getSequentialFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+std::vector<std::vector<double>> getParallelFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+
+#endif  // MODULES_TASK_2_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+\end{lstlisting}
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.cpp
+
+// Copyright 2022 Pudovkin Artem
+#include <omp.h>
+#include <random>
+#include <vector>
+
+#include "../../../modules/task_2/pudovkin_a_linear_filtering/pudovkin_a_linear_filtering.h"
+
+using std::vector;
+using v_size = vector<vector<double>>::size_type;
+
+vector<vector<double>> getRandomMatrix(const v_size rows, const v_size cols) {
+  std::random_device dev;
+  std::mt19937 gen(dev());
+  std::uniform_real_distribution<> urd(0, 1);
+  vector<vector<double>> result(rows);
+
+  for (v_size i = 0; i < rows; ++i) {
+    result[i] = vector<double>(cols);
+    for (v_size j = 0; j < cols; ++j) {
+      result[i][j] = urd(gen);
+    }
+  }
+
+  return result;
+}
+
+template <typename T>
+T clamp(T value, T min, T max) {
+  if (value > max)
+    return max;
+  else if (value < min)
+    return min;
+
+  return value;
+}
+
+double calculateNewPixelColor(const vector<vector<double>>& colorMatrix,
+                              int coordinateX,
+                              int coordinateY) {
+  double result = 0;
+
+  for (int i = -1; i <= 1; i++) {
+    for (int j = -1; j <= 1; j++) {
+      result +=
+          colorMatrix[clamp<int>(coordinateX + j, 0, colorMatrix.size() - 1)]
+                     [clamp<int>(coordinateY + i, 0,
+                                 colorMatrix[coordinateX].size() - 1)] *
+          (1.0 / 9.0);
+    }
+  }
+
+  return clamp<double>(result, 0, 1);
+}
+
+vector<vector<double>> getSequentialFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+  for (v_size i = 0; i < commonMatrixOfColor.size(); ++i) {
+    for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+      result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+    }
+  }
+
+  return result;
+}
+
+vector<vector<double>> getParallelFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+#pragma omp parallel for
+  for (int i = 0; i < static_cast<int>(commonMatrixOfColor.size()); ++i) {
+    for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+      result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+    }
+  }
+
+  return result;
+}
+
+
+
+\end{lstlisting}
+\begin{lstlisting}
+// main.cpp
+// Copyright 2022 Pudovkin Artem
+#include <gtest/gtest.h>
+#include <vector>
+#include <omp.h>
+#include "./pudovkin_a_linear_filtering.h"
+
+using v_size = std::vector<std::vector<double>>::size_type;
+
+bool IsVectorsEquals(const std::vector<std::vector<double>>& firstMatrix,
+                     const std::vector<std::vector<double>>& secondMatrix) {
+  for (v_size i = 0; i < firstMatrix.size(); ++i) {
+    for (v_size j = 0; j < firstMatrix[i].size(); ++j) {
+      if (firstMatrix[i][j] != secondMatrix[i][j])
+        return false;
+    }
+  }
+
+  return true;
+}
+
+TEST(ParallelFilter, TestMatrix1000x1000) {
+    auto matrixOfColor = getRandomMatrix(1000, 1000);
+
+    double start = omp_get_wtime();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    double end = omp_get_wtime();
+
+    std::cout << "Seq:" << end - start << "s." << std::endl;
+
+    start = omp_get_wtime();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = omp_get_wtime();
+
+    std::cout << "Par:" << end - start << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix2500x2500) {
+    auto matrixOfColor = getRandomMatrix(2500, 2500);
+
+    double start = omp_get_wtime();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    double end = omp_get_wtime();
+
+    std::cout << "Seq:" << end - start << "s." << std::endl;
+
+    start = omp_get_wtime();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = omp_get_wtime();
+
+    std::cout << "Par:" << end - start << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix5000x5000) {
+    auto matrixOfColor = getRandomMatrix(5000, 5000);
+
+    double start = omp_get_wtime();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    double end = omp_get_wtime();
+
+    std::cout << "Seq:" << end - start << "s." << std::endl;
+
+    start = omp_get_wtime();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = omp_get_wtime();
+
+    std::cout << "Par:" << end - start << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix7500x7500) {
+    auto matrixOfColor = getRandomMatrix(7500, 7500);
+
+    double start = omp_get_wtime();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    double end = omp_get_wtime();
+
+    std::cout << "Seq:" << end - start << "s." << std::endl;
+
+    start = omp_get_wtime();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = omp_get_wtime();
+
+    std::cout << "Par:" << end - start << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
+
+\end{lstlisting}
+Реализация TBB
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.h
+
+// Copyright 2022 Pudovkin Artem
+#ifndef MODULES_TASK_3_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+#define MODULES_TASK_3_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+#include <vector>
+
+std::vector<std::vector<double>> getRandomMatrix(
+    const std::vector<std::vector<double>>::size_type rows,
+    const std::vector<std::vector<double>>::size_type cols);
+std::vector<std::vector<double>> getSequentialFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+std::vector<std::vector<double>> getParallelFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+
+#endif  // MODULES_TASK_3_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+\end{lstlisting}
+
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.cpp
+
+// Copyright 2022 Pudovkin Artem
+#include <tbb/tbb.h>
+#include <random>
+#include <vector>
+
+#include "../../../modules/task_3/pudovkin_a_linear_filtering/pudovkin_a_linear_filtering.h"
+
+using std::vector;
+using v_size = vector<vector<double>>::size_type;
+
+vector<vector<double>> getRandomMatrix(const v_size rows, const v_size cols) {
+  std::random_device dev;
+  std::mt19937 gen(dev());
+  std::uniform_real_distribution<> urd(0, 1);
+  vector<vector<double>> result(rows);
+
+  for (v_size i = 0; i < rows; ++i) {
+    result[i] = vector<double>(cols);
+    for (v_size j = 0; j < cols; ++j) {
+      result[i][j] = urd(gen);
+    }
+  }
+
+  return result;
+}
+
+template <typename T>
+T clamp(T value, T min, T max) {
+  if (value > max)
+    return max;
+  else if (value < min)
+    return min;
+
+  return value;
+}
+
+double calculateNewPixelColor(const vector<vector<double>>& colorMatrix,
+                              int coordinateX,
+                              int coordinateY) {
+  double result = 0;
+
+  for (int i = -1; i <= 1; i++) {
+    for (int j = -1; j <= 1; j++) {
+      result +=
+          colorMatrix[clamp<int>(coordinateX + j, 0, colorMatrix.size() - 1)]
+                     [clamp<int>(coordinateY + i, 0,
+                                 colorMatrix[coordinateX].size() - 1)] *
+          (1.0 / 9.0);
+    }
+  }
+
+  return clamp<double>(result, 0, 1);
+}
+
+vector<vector<double>> getSequentialFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+  for (v_size i = 0; i < commonMatrixOfColor.size(); ++i) {
+    for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+      result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+    }
+  }
+
+  return result;
+}
+
+vector<vector<double>> getParallelFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+  tbb::parallel_for(
+      tbb::blocked_range<v_size>(0, commonMatrixOfColor.size()),
+      [&](tbb::blocked_range<size_t> r) {
+        for (v_size i = r.begin(); i < r.end(); ++i) {
+          for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+            result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+          }
+        }
+      });
+
+  return result;
+}
+
+
+	
+\end{lstlisting}
+
+\begin{lstlisting}
+// main.cpp
+
+// Copyright 2022 Pudovkin Artem
+#include <gtest/gtest.h>
+#include <vector>
+#include <chrono>
+#include "./pudovkin_a_linear_filtering.h"
+
+using v_size = std::vector<std::vector<double>>::size_type;
+
+bool IsVectorsEquals(const std::vector<std::vector<double>>& firstMatrix,
+                     const std::vector<std::vector<double>>& secondMatrix) {
+  for (v_size i = 0; i < firstMatrix.size(); ++i) {
+    for (v_size j = 0; j < firstMatrix[i].size(); ++j) {
+      if (firstMatrix[i][j] != secondMatrix[i][j])
+        return false;
+    }
+  }
+
+  return true;
+}
+
+TEST(ParallelFilter, TestMatrix500x500) {
+    auto matrixOfColor = getRandomMatrix(500, 500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix1000x1000) {
+    auto matrixOfColor = getRandomMatrix(1000, 1000);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix2500x2500) {
+    auto matrixOfColor = getRandomMatrix(2500, 2500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix5000x5000) {
+    auto matrixOfColor = getRandomMatrix(5000, 5000);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix7500x7500) {
+    auto matrixOfColor = getRandomMatrix(7500, 7500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
+
+	
+\end{lstlisting}
+Реализация с помощью API::threads
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.h
+
+// Copyright 2022 Pudovkin Artem
+#ifndef MODULES_TASK_4_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+#define MODULES_TASK_4_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+#include <vector>
+
+std::vector<std::vector<double>> getRandomMatrix(
+    const std::vector<std::vector<double>>::size_type rows,
+    const std::vector<std::vector<double>>::size_type cols);
+std::vector<std::vector<double>> getSequentialFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+std::vector<std::vector<double>> getParallelFilter(
+    const std::vector<std::vector<double>>& commonMatrixOfColor);
+
+#endif  // MODULES_TASK_4_PUDOVKIN_A_LINEAR_FILTERING_PUDOVKIN_A_LINEAR_FILTERING_H_
+
+\end{lstlisting}
+\begin{lstlisting}
+// pudovkin_a_linear_filtering.cpp
+
+// Copyright 2022 Pudovkin Artem
+#include <random>
+#include <utility>
+#include <vector>
+
+#include "../../../3rdparty/unapproved/unapproved.h"
+#include "../../../modules/task_4/pudovkin_a_linear_filtering/pudovkin_a_linear_filtering.h"
+
+using std::vector;
+using v_size = vector<vector<double>>::size_type;
+
+vector<vector<double>> getRandomMatrix(const v_size rows, const v_size cols) {
+  std::random_device dev;
+  std::mt19937 gen(dev());
+  std::uniform_real_distribution<> urd(0, 1);
+  vector<vector<double>> result(rows);
+
+  for (v_size i = 0; i < rows; ++i) {
+    result[i] = vector<double>(cols);
+    for (v_size j = 0; j < cols; ++j) {
+      result[i][j] = urd(gen);
+    }
+  }
+
+  return result;
+}
+
+template <typename T>
+T clamp(T value, T min, T max) {
+  if (value > max)
+    return max;
+  else if (value < min)
+    return min;
+
+  return value;
+}
+
+double calculateNewPixelColor(const vector<vector<double>>& colorMatrix,
+                              int coordinateX,
+                              int coordinateY) {
+  double result = 0;
+
+  for (int i = -1; i <= 1; i++) {
+    for (int j = -1; j <= 1; j++) {
+      result +=
+          colorMatrix[clamp<int>(coordinateX + j, 0, colorMatrix.size() - 1)]
+                     [clamp<int>(coordinateY + i, 0,
+                                 colorMatrix[coordinateX].size() - 1)] *
+          (1.0 / 9.0);
+    }
+  }
+
+  return clamp<double>(result, 0, 1);
+}
+
+vector<vector<double>> getSequentialFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+  for (v_size i = 0; i < commonMatrixOfColor.size(); ++i) {
+    for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+      result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+    }
+  }
+
+  return result;
+}
+
+vector<vector<double>> getParallelFilter(
+    const vector<vector<double>>& commonMatrixOfColor) {
+  vector<vector<double>> result = commonMatrixOfColor;
+
+  int numberOfThread = std::thread::hardware_concurrency();
+  int dataPortion = commonMatrixOfColor.size() / numberOfThread;
+
+  vector<std::pair<v_size, v_size>> vectorOfRange(numberOfThread);
+  std::future<void>* futures = new std::future<void>[numberOfThread];
+
+  for (int i = 0; i < numberOfThread; ++i) {
+    if (i != numberOfThread - 1) {
+      vectorOfRange[i] = {i * dataPortion, (i + 1) * dataPortion};
+    } else {
+      vectorOfRange[i] = {i * dataPortion, commonMatrixOfColor.size()};
+    }
+
+    futures[i] = std::async(
+        std::launch::async,
+        [&](const int currentThread) {
+          for (v_size i = vectorOfRange[currentThread].first;
+               i < vectorOfRange[currentThread].second; ++i) {
+            for (v_size j = 0; j < commonMatrixOfColor[i].size(); ++j) {
+              result[i][j] = calculateNewPixelColor(commonMatrixOfColor, i, j);
+            }
+          }
+        },
+        i);
+  }
+
+  for (int i = 0; i < numberOfThread; ++i)
+    futures[i].get();
+
+  delete[] futures;
+  return result;
+}
+
+	
+	
+	
+\end{lstlisting}
+\begin{lstlisting}
+// main.cpp
+// Copyright 2022 Pudovkin Artem
+#include <gtest/gtest.h>
+#include <vector>
+#include <chrono>
+#include "./pudovkin_a_linear_filtering.h"
+
+using v_size = std::vector<std::vector<double>>::size_type;
+
+bool IsVectorsEquals(const std::vector<std::vector<double>>& firstMatrix,
+                     const std::vector<std::vector<double>>& secondMatrix) {
+  for (v_size i = 0; i < firstMatrix.size(); ++i) {
+    for (v_size j = 0; j < firstMatrix[i].size(); ++j) {
+      if (firstMatrix[i][j] != secondMatrix[i][j])
+        return false;
+    }
+  }
+
+  return true;
+}
+
+TEST(ParallelFilter, TestMatrix500x500) {
+    auto matrixOfColor = getRandomMatrix(500, 500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix1000x1000) {
+    auto matrixOfColor = getRandomMatrix(1000, 1000);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix2500x2500) {
+    auto matrixOfColor = getRandomMatrix(2500, 2500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix5000x5000) {
+    auto matrixOfColor = getRandomMatrix(5000, 5000);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+TEST(ParallelFilter, TestMatrix7500x7500) {
+    auto matrixOfColor = getRandomMatrix(7500, 7500);
+
+    auto start = std::chrono::system_clock::now();
+    auto resultSeqMatrix = getSequentialFilter(matrixOfColor);
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> diff = end - start;
+
+    std::cout << "Seq:" << diff.count() << "s." << std::endl;
+
+    start = std::chrono::system_clock::now();
+    auto resultParallelMatrix = getParallelFilter(matrixOfColor);
+    end = std::chrono::system_clock::now();
+    diff = end - start;
+
+    std::cout << "Par:" << diff.count() << "s." << std::endl;
+
+    bool isEqual = IsVectorsEquals(resultSeqMatrix, resultParallelMatrix);
+
+    ASSERT_EQ(isEqual, true);
+}
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
+\end{lstlisting}
+\end{document}
